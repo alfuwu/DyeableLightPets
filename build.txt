@@ -1,6 +1,6 @@
 displayName = Dyeable Light Pets
 author = alfuwu
-version = 2.580.8695
+version = 2.580.8696
 hideCode = false
 hideResources = false
 includeSource = true
