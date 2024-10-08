@@ -115,7 +115,6 @@ public class DyeableLightPet : GlobalProjectile {
             c.Emit(OpCodes.Ldarg_0);
             c.EmitDelegate((Vector3 vec, Projectile proj) => {
                 int dyeID = Main.player[proj.owner].miscDyes[1].dye;
-                Main.NewText(dyeID);
                 return dyeID > 0 ? GetDyeColor(proj, dyeID, vec.X, vec.Y, vec.Z).ToVector3() : vec;
             });
             c.MarkLabel(vanilla);
@@ -178,7 +177,6 @@ public class DyeableLightPet : GlobalProjectile {
             c.Emit(OpCodes.Ldarg_0);
             c.EmitDelegate((Vector3 vec, Projectile proj) => {
                 int dyeID = Main.player[proj.owner].miscDyes[1].dye;
-                Main.NewText(dyeID);
                 return dyeID > 0 ? GetDyeColor(proj, dyeID, vec.X, vec.Y, vec.Z).ToVector3() : vec;
             });
             c.MarkLabel(vanilla);
@@ -236,7 +234,6 @@ public class DyeableLightPet : GlobalProjectile {
                 c.Emit(OpCodes.Ldarg_0);
                 c.EmitDelegate((Vector3 vec, Projectile proj) => {
                     int dyeID = Main.player[proj.owner].miscDyes[1].dye;
-                    Main.NewText(dyeID);
                     return dyeID > 0 ? GetDyeColor(proj, dyeID, vec.X, vec.Y, vec.Z).ToVector3() : vec;
                 });
                 c.MarkLabel(vanilla);
