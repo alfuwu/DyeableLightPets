@@ -3,6 +3,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Mono.Cecil.Cil;
 using MonoMod.Cil;
 using System;
+using System.Reflection;
 using Terraria;
 using Terraria.GameContent;
 using Terraria.Graphics.Shaders;
@@ -24,16 +25,26 @@ public class DyeableLightPet : GlobalProjectile {
     public override bool AppliesToEntity(Projectile proj, bool lateInstantiation) => ProjectileID.Sets.LightPet[proj.type];
 
     public override void Load() {
+        IL_Projectile.AI_026 += AI_026;
+        IL_Projectile.AI_067_FreakingPirates += AI_067_FreakingPirates;
+        IL_Projectile.AI_144_DD2Pet += AI_144_DD2Pet;
         IL_Projectile.ProjLight += ProjLight;
         IL_Projectile.VanillaAI += VanillaAI;
+
+        On_Lighting.AddLight_Vector2_float_float_float += OnAddLight;
     }
 
     public override void Unload() {
+        IL_Projectile.AI_026 -= AI_026;
+        IL_Projectile.AI_067_FreakingPirates -= AI_067_FreakingPirates;
+        IL_Projectile.AI_144_DD2Pet -= AI_144_DD2Pet;
         IL_Projectile.ProjLight -= ProjLight;
         IL_Projectile.VanillaAI -= VanillaAI;
+
+        On_Lighting.AddLight_Vector2_float_float_float -= OnAddLight;
     }
 
-    private static Color GetDyeColor(Projectile proj, int dyeID, float r, float g, float b) {
+    private static Color GetDyeColor(Projectile proj, int dyeID, float r, float g, float b) { // aint no way this is the optimal way to do this
         int t = Main.player[proj.owner].miscDyes[1].type;
         ref Color prev = ref proj.GetGlobalProjectile<DyeableLightPet>().previousColor; // linear interpolation for smoother colors
         Color outputColor;
@@ -56,12 +67,125 @@ public class DyeableLightPet : GlobalProjectile {
             target.GetData(pixelData); // populate output array
             outputColor = pixelData[0]; // get color of the pixel we applied the armor shader to
         }
-        if (prev.A <= 0)
-            prev = new Color(r, g, b);
-        if (prev != outputColor)
+        //if (prev.A <= 0)
+        //    prev = new Color(r, g, b);
+        if (prev != outputColor && prev.A > 0)
             outputColor = Color.Lerp(prev, outputColor, 0.05f);
         prev = outputColor;
         return outputColor;
+    }
+
+    // scuffed mod projectile support
+    private void OnAddLight(On_Lighting.orig_AddLight_Vector2_float_float_float orig, Vector2 position, float r, float g, float b) {
+        foreach (Projectile proj in Main.projectile) {
+            if (proj.Center == position && ProjectileID.Sets.LightPet[proj.type] && proj.ModProjectile != null && proj.active) {
+                int dyeID = Main.player[proj.owner].miscDyes[1].dye;
+                if (dyeID > 0) {
+                    Color outputColor = GetDyeColor(proj, dyeID, r, g, b);
+                    r = outputColor.R / 255f;
+                    g = outputColor.G / 255f;
+                    b = outputColor.B / 255f;
+                }
+                return;
+            }
+        }
+        orig(position, r, g, b);
+    }
+
+    private void AI_026(ILContext il) {
+        try {
+            ILCursor c = new(il);
+            c.GotoNext(MoveType.After, i => i.MatchLdarg0(),
+                i => i.MatchLdfld<Projectile>("type"),
+                i => i.MatchLdcI4(ProjectileID.GolemPet),
+                i => i.MatchBneUn(out _),
+                i => i.MatchLdsfld<Main>("player"),
+                i => i.MatchLdarg0(),
+                i => i.MatchLdfld<Projectile>("owner"),
+                i => i.MatchLdelemRef(),
+                i => i.MatchPop(),
+                i => i.MatchLdcR4(out _),
+                i => i.MatchLdcR4(out _),
+                i => i.MatchLdcR4(out _),
+                i => i.MatchNewobj<Vector3>());
+            ILLabel vanilla = il.DefineLabel();
+            c.Emit(OpCodes.Ldarg_0);
+            c.EmitDelegate((Projectile proj) => ProjectileID.Sets.LightPet[proj.type]);
+            c.Emit(OpCodes.Brfalse_S, vanilla);
+            c.Emit(OpCodes.Ldarg_0);
+            c.EmitDelegate((Vector3 vec, Projectile proj) => {
+                int dyeID = Main.player[proj.owner].miscDyes[1].dye;
+                Main.NewText(dyeID);
+                return dyeID > 0 ? GetDyeColor(proj, dyeID, vec.X, vec.Y, vec.Z).ToVector3() : vec;
+            });
+            c.MarkLabel(vanilla);
+        } catch (Exception e) {
+            MonoModHooks.DumpIL(Mod, il);
+            throw new ILPatchFailureException(Mod, il, e);
+        }
+    }
+
+    private void AI_067_FreakingPirates(ILContext il) {
+        try {
+            ILCursor c = new(il);
+            c.GotoNext(MoveType.After, i => i.MatchLdarg0(),
+                i => i.MatchLdfld<Projectile>("type"),
+                i => i.MatchLdcI4(ProjectileID.CrimsonHeart),
+                i => i.MatchBneUn(out _),
+                i => i.MatchLdarg0(),
+                i => i.MatchCall<Entity>("get_Center"),
+                i => i.MatchLdcR4(out float r),
+                i => i.MatchLdcR4(out float g),
+                i => i.MatchLdcR4(out float b));
+            ILLabel vanilla = il.DefineLabel();
+            c.Emit(OpCodes.Ldarg_0);
+            c.EmitDelegate((Projectile proj) => ProjectileID.Sets.LightPet[proj.type]);
+            c.Emit(OpCodes.Brfalse_S, vanilla);
+            for (int i = 0; i < 3; i++)
+                c.Emit(OpCodes.Pop); // pop the three floats off the stack
+            c.Emit(OpCodes.Ldarg_0);
+            c.EmitDelegate((Vector2 center, Projectile proj) => {
+                int dyeID = Main.player[proj.owner].miscDyes[1].dye;
+                if (dyeID > 0) {
+                    Color col = GetDyeColor(proj, dyeID, 0.9f, 0.1f, 0.3f);
+                    Lighting.AddLight(center, col.ToVector3());
+                } else {
+                    Lighting.AddLight(center, 0.9f, 0.1f, 0.3f);
+                }
+            });
+            ILLabel skipAddLight = il.DefineLabel();
+            c.Emit(OpCodes.Br_S, skipAddLight);
+            c.MarkLabel(vanilla);
+            c.GotoNext(MoveType.After, i => i.MatchCall<Lighting>("AddLight"));
+            c.MarkLabel(skipAddLight);
+        } catch (Exception e) {
+            MonoModHooks.DumpIL(Mod, il);
+            throw new ILPatchFailureException(Mod, il, e);
+        }
+    }
+
+    private void AI_144_DD2Pet(ILContext il) {
+        try {
+            ILCursor c = new(il);
+            c.GotoNext(MoveType.After, i => i.MatchLdcR4(out _),
+                i => i.MatchLdcR4(out _),
+                i => i.MatchLdcR4(out _),
+                i => i.MatchNewobj<Vector3>());
+            ILLabel vanilla = il.DefineLabel();
+            c.Emit(OpCodes.Ldarg_0);
+            c.EmitDelegate((Projectile proj) => ProjectileID.Sets.LightPet[proj.type]);
+            c.Emit(OpCodes.Brfalse_S, vanilla);
+            c.Emit(OpCodes.Ldarg_0);
+            c.EmitDelegate((Vector3 vec, Projectile proj) => {
+                int dyeID = Main.player[proj.owner].miscDyes[1].dye;
+                Main.NewText(dyeID);
+                return dyeID > 0 ? GetDyeColor(proj, dyeID, vec.X, vec.Y, vec.Z).ToVector3() : vec;
+            });
+            c.MarkLabel(vanilla);
+        } catch (Exception e) {
+            MonoModHooks.DumpIL(Mod, il);
+            throw new ILPatchFailureException(Mod, il, e);
+        }
     }
 
     private void ProjLight(ILContext il) {
@@ -112,9 +236,8 @@ public class DyeableLightPet : GlobalProjectile {
                 c.Emit(OpCodes.Ldarg_0);
                 c.EmitDelegate((Vector3 vec, Projectile proj) => {
                     int dyeID = Main.player[proj.owner].miscDyes[1].dye;
-                    if (dyeID > 0)
-                        return GetDyeColor(proj, dyeID, vec.X, vec.Y, vec.Z).ToVector3();
-                    return vec;
+                    Main.NewText(dyeID);
+                    return dyeID > 0 ? GetDyeColor(proj, dyeID, vec.X, vec.Y, vec.Z).ToVector3() : vec;
                 });
                 c.MarkLabel(vanilla);
             }
