@@ -1,0 +1,3 @@
+Dyeable Light Pets fixes an issue with vanilla Terraria where the light emitted by a light pet would not be affected by the dye applied to the light pet.
+
+Now you can dye your light pets all you want without the emitted light ruining the effect!
