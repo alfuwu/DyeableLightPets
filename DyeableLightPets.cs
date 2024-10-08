@@ -3,7 +3,6 @@ using Microsoft.Xna.Framework.Graphics;
 using Mono.Cecil.Cil;
 using MonoMod.Cil;
 using System;
-using System.Reflection;
 using Terraria;
 using Terraria.GameContent;
 using Terraria.Graphics.Shaders;
@@ -54,7 +53,7 @@ public class DyeableLightPet : GlobalProjectile {
         } else {
             target ??= new(Main.graphics.GraphicsDevice, 1, 1); // instantiate render target if it's null
             Main.graphics.GraphicsDevice.SetRenderTarget(target); // set render target
-            Main.graphics.GraphicsDevice.Clear(Color.Transparent); // clear image
+            Main.graphics.GraphicsDevice.Clear(Color.Transparent); // clear image (can i just clear with Color.white and skip the whole drawing with magic pixel? maybe idk)
 
             // begin spritebatch
             Main.spriteBatch.Begin(SpriteSortMode.Immediate, null, Main.DefaultSamplerState, DepthStencilState.None, Main.Rasterizer, null, Main.GameViewMatrix.TransformationMatrix);
@@ -133,13 +132,9 @@ public class DyeableLightPet : GlobalProjectile {
                 i => i.MatchBneUn(out _),
                 i => i.MatchLdarg0(),
                 i => i.MatchCall<Entity>("get_Center"),
-                i => i.MatchLdcR4(out float r),
-                i => i.MatchLdcR4(out float g),
-                i => i.MatchLdcR4(out float b));
-            ILLabel vanilla = il.DefineLabel();
-            c.Emit(OpCodes.Ldarg_0);
-            c.EmitDelegate((Projectile proj) => ProjectileID.Sets.LightPet[proj.type]);
-            c.Emit(OpCodes.Brfalse_S, vanilla);
+                i => i.MatchLdcR4(out _),
+                i => i.MatchLdcR4(out _),
+                i => i.MatchLdcR4(out _));
             for (int i = 0; i < 3; i++)
                 c.Emit(OpCodes.Pop); // pop the three floats off the stack
             c.Emit(OpCodes.Ldarg_0);
@@ -154,7 +149,6 @@ public class DyeableLightPet : GlobalProjectile {
             });
             ILLabel skipAddLight = il.DefineLabel();
             c.Emit(OpCodes.Br_S, skipAddLight);
-            c.MarkLabel(vanilla);
             c.GotoNext(MoveType.After, i => i.MatchCall<Lighting>("AddLight"));
             c.MarkLabel(skipAddLight);
         } catch (Exception e) {
@@ -170,16 +164,11 @@ public class DyeableLightPet : GlobalProjectile {
                 i => i.MatchLdcR4(out _),
                 i => i.MatchLdcR4(out _),
                 i => i.MatchNewobj<Vector3>());
-            ILLabel vanilla = il.DefineLabel();
-            c.Emit(OpCodes.Ldarg_0);
-            c.EmitDelegate((Projectile proj) => ProjectileID.Sets.LightPet[proj.type]);
-            c.Emit(OpCodes.Brfalse_S, vanilla);
             c.Emit(OpCodes.Ldarg_0);
             c.EmitDelegate((Vector3 vec, Projectile proj) => {
                 int dyeID = Main.player[proj.owner].miscDyes[1].dye;
                 return dyeID > 0 ? GetDyeColor(proj, dyeID, vec.X, vec.Y, vec.Z).ToVector3() : vec;
             });
-            c.MarkLabel(vanilla);
         } catch (Exception e) {
             MonoModHooks.DumpIL(Mod, il);
             throw new ILPatchFailureException(Mod, il, e);
@@ -227,17 +216,13 @@ public class DyeableLightPet : GlobalProjectile {
                 i => i.MatchLdcI4(124));
             for (int i = 0; i < 3; i++) {
                 c.GotoNext(MoveType.After, i => i.MatchNewobj<Vector3>());
-                ILLabel vanilla = il.DefineLabel();
-                c.Emit(OpCodes.Ldarg_0);
-                c.EmitDelegate((Projectile proj) => ProjectileID.Sets.LightPet[proj.type]);
-                c.Emit(OpCodes.Brfalse_S, vanilla);
                 c.Emit(OpCodes.Ldarg_0);
                 c.EmitDelegate((Vector3 vec, Projectile proj) => {
                     int dyeID = Main.player[proj.owner].miscDyes[1].dye;
                     return dyeID > 0 ? GetDyeColor(proj, dyeID, vec.X, vec.Y, vec.Z).ToVector3() : vec;
                 });
-                c.MarkLabel(vanilla);
             }
+            MonoModHooks.DumpIL(Mod, il);
         } catch (Exception e) {
             MonoModHooks.DumpIL(Mod, il);
             throw new ILPatchFailureException(Mod, il, e);
